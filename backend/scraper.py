@@ -71,17 +71,16 @@ def scrape_article(url: str) -> dict | None:
     else:
         title = url
 
-    # --- Content: pick the selector with the most text ---
-    best_text = ""
-    for selector in [".blog-post-content", "article", "main"]:
-        element = soup.select_one(selector)
-        if element:
-            candidate = element.get_text(separator=" ", strip=True)
-            if len(candidate) > len(best_text):
-                best_text = candidate
+    # --- Content ---
+    element = soup.select_one("article")
+    raw_text = element.get_text(separator=" ", strip=True) if element else ""
 
     # Collapse whitespace
-    content = re.sub(r"\s+", " ", best_text).strip()
+    content = re.sub(r"\s+", " ", raw_text).strip()
+
+    if not content:
+        print(f"  SKIP (no <article> content): {url}")
+        return None
 
     # --- Published date ---
     pub_meta = soup.find("meta", property="article:published_time") or soup.find(
