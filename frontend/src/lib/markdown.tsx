@@ -1,6 +1,12 @@
 import { Fragment, type ReactNode } from "react";
 
-type InlinePart = string | { kind: "code"; content: string } | { kind: "strong"; content: string };
+import type { Source } from "../types";
+
+type InlinePart =
+  | string
+  | { kind: "code"; content: string }
+  | { kind: "strong"; content: string }
+  | { kind: "cite"; num: number };
 
 function inlineParse(str: string): InlinePart[] {
   const parts: InlinePart[] = [];
@@ -12,25 +18,42 @@ function inlineParse(str: string): InlinePart[] {
     seg.split(/(\*\*[^*]+\*\*)/g).forEach((b) => {
       if (b.startsWith("**") && b.endsWith("**")) {
         parts.push({ kind: "strong", content: b.slice(2, -2) });
-      } else if (b) {
-        parts.push(b);
+        return;
       }
+      b.split(/(\[\d+\])/g).forEach((c) => {
+        const cite = c.match(/^\[(\d+)\]$/);
+        if (cite) {
+          parts.push({ kind: "cite", num: parseInt(cite[1], 10) });
+        } else if (c) {
+          parts.push(c);
+        }
+      });
     });
   });
   return parts;
 }
 
-function renderInline(parts: InlinePart[], keyPrefix: string): ReactNode[] {
+function renderInline(parts: InlinePart[], keyPrefix: string, sources: Source[]): ReactNode[] {
   return parts.map((part, i) => {
-    if (typeof part === "string") {
-      return <Fragment key={`${keyPrefix}-t${i}`}>{part}</Fragment>;
-    }
+    if (typeof part === "string") return <Fragment key={`${keyPrefix}-t${i}`}>{part}</Fragment>;
     if (part.kind === "code") return <code key={`${keyPrefix}-c${i}`}>{part.content}</code>;
-    return <strong key={`${keyPrefix}-s${i}`}>{part.content}</strong>;
+    if (part.kind === "strong") return <strong key={`${keyPrefix}-s${i}`}>{part.content}</strong>;
+    const url = sources[part.num - 1]?.url;
+    return url ? (
+      <a
+        key={`${keyPrefix}-ref${i}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mx-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded bg-brand/20 px-1 font-mono text-[10px] font-semibold text-brand-300 no-underline transition-colors hover:bg-brand/40 hover:text-white"
+      >
+        {part.num}
+      </a>
+    ) : <Fragment key={`${keyPrefix}-ref${i}`}>[{part.num}]</Fragment>;
   });
 }
 
-export function renderMarkdown(text: string): ReactNode[] {
+export function renderMarkdown(text: string, sources: Source[] = []): ReactNode[] {
   return text
     .trim()
     .split(/\n{2,}/)
@@ -44,7 +67,7 @@ export function renderMarkdown(text: string): ReactNode[] {
           parts.push(
             <ul key={`u-${i}-${parts.length}`}>
               {items.map((b, bi) => (
-                <li key={bi}>{renderInline(inlineParse(b), `u${i}-${bi}`)}</li>
+                <li key={bi}>{renderInline(inlineParse(b), `u${i}-${bi}`, sources)}</li>
               ))}
             </ul>
           );
@@ -58,7 +81,7 @@ export function renderMarkdown(text: string): ReactNode[] {
         } else if (t) {
           flush();
           parts.push(
-            <p key={`p-${i}-${li}`}>{renderInline(inlineParse(t), `p${i}${li}`)}</p>
+            <p key={`p-${i}-${li}`}>{renderInline(inlineParse(t), `p${i}${li}`, sources)}</p>
           );
         }
       });

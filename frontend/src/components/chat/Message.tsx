@@ -50,7 +50,7 @@ export function Message({ msg }: Props) {
             )}
           </div>
           <div className="md text-[14.5px] leading-[1.7] text-bone-soft">
-            {renderMarkdown(msg.text)}
+            {renderMarkdown(msg.text, sources)}
           </div>
         </div>
 

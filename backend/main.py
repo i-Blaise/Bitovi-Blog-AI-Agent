@@ -142,7 +142,7 @@ def start_ingest(background_tasks: BackgroundTasks) -> dict:
     """
     with _ingest_lock:
         if _ingest_state["status"] in ("scraping", "ingesting"):
-            raise HTTPException(status_code=409, detail="Ingestion already in progress.")
+            raise HTTPException(status_code=409, detail="Ingestion in progress.")
 
     background_tasks.add_task(_run_ingest)
     return {"status": "started"}

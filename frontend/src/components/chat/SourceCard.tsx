@@ -33,10 +33,6 @@ export function SourceCard({ source, index }: Props) {
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-brand" />
           bitovi.com
         </div>
-        <ExternalLink
-          size={13}
-          className="ml-auto text-bone-dim transition-colors group-hover:text-brand-300"
-        />
       </div>
       <h4 className="font-display text-[14px] font-semibold leading-snug text-bone group-hover:text-white">
         {source.title}
@@ -53,6 +49,10 @@ export function SourceCard({ source, index }: Props) {
             <span className="font-mono text-[10px] text-bone-dim">{date}</span>
           )}
         </div>
+        <span className="flex items-center gap-1 rounded-lg border border-brand/30 bg-brand/10 px-2.5 py-1 font-mono text-[10.5px] font-medium text-brand-300 transition-all group-hover:border-brand/60 group-hover:bg-brand/20 group-hover:text-white">
+          Open Article
+          <ExternalLink size={10} className="shrink-0" />
+        </span>
       </div>
     </a>
   );

@@ -65,7 +65,7 @@ export function ChatPanel({ messages, isThinking, onSend }: Props) {
               Blog Knowledge Assistant
             </h2>
             <p className="mt-1 font-mono text-[10.5px] text-bone-dim">
-              Retrieval-augmented · grounded in bitovi.com/blog
+              grounded in bitovi.com/blog
             </p>
           </div>
         </div>

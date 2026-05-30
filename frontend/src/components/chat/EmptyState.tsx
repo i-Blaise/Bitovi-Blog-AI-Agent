@@ -22,7 +22,7 @@ export function EmptyState({ onPick }: Props) {
         Ask the Bitovi blog anything
       </h3>
       <p className="mt-2 max-w-md text-[13.5px] leading-relaxed text-bone-dim">
-        Every answer is retrieved from indexed engineering posts, scored for confidence, and fully cited.
+        Every answer is retrieved from Bitovi's indexed blog posts and cited back to the source article.
       </p>
       <div className="mt-6 grid w-full max-w-xl gap-2.5 sm:grid-cols-2">
         {EXAMPLE_QUESTIONS.map((q, i) => {

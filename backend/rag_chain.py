@@ -236,17 +236,34 @@ def _build_numbered_context(docs: list) -> tuple[str, list[dict]]:
     return "\n\n".join(parts), sources
 
 
-def _filter_cited_sources(answer: str, sources: list[dict]) -> list[dict]:
-    """Return only sources whose number was cited in the answer text via [N] markers.
+def _filter_cited_sources(answer: str, sources: list[dict]) -> tuple[str, list[dict]]:
+    """Return only sources cited in the answer, with citations renumbered to match.
 
-    If the LLM did not cite anything, returns an empty list — the LLM either
-    couldn't answer or chose not to use the context, so showing sources would
-    be misleading.
+    The LLM may cite [6][7] out of 8 sources. This filters to just those two,
+    then rewrites [6] → [1] and [7] → [2] in the answer so the inline numbers
+    always match the displayed source cards.
+
+    Returns (renumbered_answer, filtered_sources).
     """
     import re
-    # Match both [1] and [Source 1] / [source 1] formats
-    cited = {int(m) for m in re.findall(r"\[(?:source\s+)?(\d+)\]", answer, re.IGNORECASE)}
-    return [s for i, s in enumerate(sources, 1) if i in cited]
+    cited_nums = {int(m) for m in re.findall(r"\[(?:source\s+)?(\d+)\]", answer, re.IGNORECASE)}
+    filtered = [s for i, s in enumerate(sources, 1) if i in cited_nums]
+
+    # Build old-number → new-number mapping (order preserved from filtered list)
+    url_to_new: dict[str, int] = {s["url"]: i + 1 for i, s in enumerate(filtered)}
+    old_to_new: dict[int, int] = {}
+    for old_i, s in enumerate(sources, 1):
+        new = url_to_new.get(s["url"])
+        if new is not None:
+            old_to_new[old_i] = new
+
+    def _replace(m: re.Match) -> str:
+        old = int(m.group(1))
+        new = old_to_new.get(old)
+        return f"[{new}]" if new else ""
+
+    renumbered = re.sub(r"\[(?:source\s+)?(\d+)\]", _replace, answer, flags=re.IGNORECASE)
+    return renumbered, filtered
 
 
 
@@ -312,13 +329,13 @@ def query_rag(question: str) -> dict:
             answer = llm.invoke(formatted).content
         else:
             return {"answer": "I could not find any articles with a publication date.", "sources": []}
-        sources = _filter_cited_sources(answer, numbered_sources)
+        answer, sources = _filter_cited_sources(answer, numbered_sources)
         return {"answer": answer, "sources": sources}
 
     result = rag_chain.invoke(question)
     answer = result["result"]
     numbered_sources = result.get("numbered_sources", [])
-    sources = _filter_cited_sources(answer, numbered_sources)
+    answer, sources = _filter_cited_sources(answer, numbered_sources)
 
     return {"answer": answer, "sources": sources}
 

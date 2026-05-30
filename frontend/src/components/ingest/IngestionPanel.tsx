@@ -225,7 +225,7 @@ export function IngestionPanel({ onComplete }: Props) {
           type="button"
           onClick={handleStart}
           disabled={running}
-          className="group flex w-full items-center justify-center gap-2.5 rounded-xl px-4 py-3.5 text-[14px] font-semibold text-white transition-all disabled:cursor-not-allowed"
+          className="group flex w-full items-center justify-center gap-2.5 rounded-xl px-4 py-3.5 text-[14px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 active:brightness-95 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:brightness-100"
           style={{
             background: running ? "#3a4150" : "linear-gradient(180deg, #e63329, #cf2c23)",
             boxShadow: running ? "none" : "0 10px 28px -12px rgba(230,51,41,0.9)",
@@ -238,7 +238,7 @@ export function IngestionPanel({ onComplete }: Props) {
             </>
           ) : done ? (
             <>
-              <RefreshCw size={17} />
+              <RefreshCw size={17} className="transition-transform duration-300 group-hover:rotate-180" />
               Re-ingest Bitovi Blog
             </>
           ) : (
