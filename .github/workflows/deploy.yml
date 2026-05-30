@@ -1,0 +1,41 @@
+name: Deploy Bitovi
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Execute deployment script on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.SERVER_HOST }}
+          username: root
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "Starting deployment..."
+
+            cd /var/www/production/bitovi
+
+            git pull origin main
+
+            echo "Installing frontend dependencies..."
+            cd frontend
+            npm ci
+            npm run build
+
+            echo "Installing backend dependencies..."
+            cd ../backend
+
+            source venv/bin/activate
+            pip install -r requirements.txt
+
+            sudo systemctl restart bitovi-api
+
+            echo "Deployment completed successfully."
