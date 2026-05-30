@@ -8,7 +8,7 @@ A Retrieval-Augmented Generation (RAG) application that answers natural-language
 
 **Frontend:** https://bitovi.artfricastudio.com/
 
-**Backend API:** https://api-bitovi.artfricastudio.com/
+**Backend API (interactive docs):** https://api-bitovi.artfricastudio.com/docs
 
 ## Demo Video
 
