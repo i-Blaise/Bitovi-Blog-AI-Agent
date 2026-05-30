@@ -1,6 +1,6 @@
 # Bitovi Blog AI Agent
 
-A Retrieval-Augmented Generation (RAG) app that answers natural-language questions about Bitovi's engineering blog. It scrapes all ~460 articles into a persistent vector store and serves grounded, citation-backed answers via a FastAPI backend and React UI.
+A Retrieval-Augmented Generation (RAG) app that answers natural-language questions about Bitovi's blog. It scrapes all ~460 articles into a persistent vector store and serves grounded, citation-backed answers via a FastAPI backend and React UI.
 
 Its defining decision: **knowledge** questions ("what does Bitovi recommend for E2E testing?") use semantic retrieval + an LLM, while **discovery** questions ("how many AI articles are there?") use deterministic metadata filtering over Bitovi's topic tags — each routed to the strategy that produces a correct, verifiable answer.
 
