@@ -1,1 +1,19 @@
-/.venv
+# Environment
+.env
+
+# Generated at ingest time, not committed
+chroma_db/
+docstore/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store

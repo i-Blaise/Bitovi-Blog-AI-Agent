@@ -83,10 +83,23 @@ def scrape_article(url: str) -> dict | None:
         return None
 
     # --- Published date ---
-    pub_meta = soup.find("meta", property="article:published_time") or soup.find(
-        "meta", attrs={"property": "og:article:published_time"}
-    )
-    published_date = pub_meta["content"].strip() if pub_meta and pub_meta.get("content") else ""
+    time_tag = soup.find("time")
+    published_date = time_tag.get_text(strip=True) if time_tag else ""
+
+    # --- Topics ---
+    # Collect unique topic slugs from /blog/topic/ links on the page.
+    # Stored as space-separated slugs (hyphens removed) for easy regex matching.
+    seen_slugs: set[str] = set()
+    topic_parts: list[str] = []
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        if "/blog/topic/" not in href:
+            continue
+        slug = href.split("/blog/topic/")[-1].rstrip("/").lower()
+        if slug and slug not in seen_slugs:
+            seen_slugs.add(slug)
+            topic_parts.append(slug.replace("-", " "))
+    topics = " ".join(topic_parts)
 
     time.sleep(0.5)
 
@@ -95,6 +108,7 @@ def scrape_article(url: str) -> dict | None:
         "content": content,
         "url": url,
         "published_date": published_date,
+        "topics": topics,
     }
 
 

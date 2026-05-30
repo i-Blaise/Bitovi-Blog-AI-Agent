@@ -4,18 +4,63 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from langchain_classic.retrievers import ParentDocumentRetriever
+from langchain_classic.storage import LocalFileStore, create_kv_docstore
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnablePassthrough
 from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 CHROMA_PERSIST_DIR = "./chroma_db"
+DOCSTORE_DIR = "./docstore"
 COLLECTION_NAME = "bitovi_blog"
 
+LISTING_KEYWORDS = [
+    "show me all",
+    "list all",
+    "all articles",
+    "all blogs",
+    "all blog posts",
+    "all posts",
+    "every article",
+    "every blog",
+    "every post",
+    "how many articles",
+    "how many blogs",
+    "how many blog posts",
+    "how many posts",
+]
+
+RECENCY_KEYWORDS = [
+    "latest",
+    "most recent",
+    "newest",
+    "recent",
+    "last blog",
+    "last article",
+    "last post",
+    "new article",
+    "new blog",
+    "new post",
+    "just published",
+    "this week",
+    "this month",
+    "current",
+    "today",
+]
+
 _SYSTEM_PROMPT = (
-    "You are an AI assistant that answers questions based solely on Bitovi's blog articles.\n"
-    "Use only the provided context to answer. If the context does not contain enough information\n"
-    "to answer the question, say so clearly. Always be concise and helpful.\n\n"
+    "You are an AI assistant that answers questions based on Bitovi's blog articles.\n\n"
+    "Use the numbered context below to answer the question. Each source is labeled [Source N].\n"
+    "CITATION RULES — follow these exactly:\n"
+    "- Every sentence or clause that draws on a source MUST end with its citation in square brackets, e.g. [1] or [2][3].\n"
+    "- If multiple sources support the same point, cite all of them: [1][3].\n"
+    "- Do not write any factual claim without a citation. If you cannot cite it, do not say it.\n"
+    "- Never group all citations at the end of a paragraph — place each one immediately after the claim it supports.\n"
+    "If the context partially addresses the question, share what you can find and note what's missing.\n"
+    "Only say you cannot answer if there is no relevant information in the context at all.\n"
+    "Be concise and helpful.\n\n"
     "Context:\n{context}\n\n"
     "Question: {question}\n\n"
     "Answer:"
@@ -31,15 +76,178 @@ vectorstore = Chroma(
     persist_directory=CHROMA_PERSIST_DIR,
 )
 
-retriever = vectorstore.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 5},
+retriever = ParentDocumentRetriever(
+    vectorstore=vectorstore,
+    docstore=create_kv_docstore(LocalFileStore(DOCSTORE_DIR)),
+    child_splitter=RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=75),
+    parent_splitter=RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200),
+    search_kwargs={"k": 15},
 )
 
 
-def _format_docs(docs: list) -> str:
-    """Join document page_content strings for use as prompt context."""
-    return "\n\n".join(doc.page_content for doc in docs)
+def _is_listing_query(question: str) -> bool:
+    """Return True if the question is asking to list all articles on a topic."""
+    lowered = question.lower()
+    return any(keyword in lowered for keyword in LISTING_KEYWORDS)
+
+
+def _extract_topic(question: str) -> str | None:
+    """Extract the topic from a listing query.
+
+    Looks for text following 'about', 'on', or 'regarding'.
+    Returns None if no topic can be extracted.
+    """
+    import re
+    match = re.search(r"(?:about|on|regarding)\s+(.+?)(?:[?.!]|$)", question, re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).strip().rstrip(".,!?;:")
+
+
+def _search_articles_by_topic(topic: str) -> list[dict]:
+    """Scan all ChromaDB metadata and return unique articles whose title or URL contains the topic.
+
+    Uses word boundary matching so 'AI' does not match 'training' or 'available'.
+    """
+    import re
+    all_metadata = vectorstore._collection.get(include=["metadatas"])
+    pattern = re.compile(r"\b" + re.escape(topic) + r"\b", re.IGNORECASE)
+
+    seen_urls: set[str] = set()
+    matches: list[dict] = []
+
+    for meta in all_metadata["metadatas"]:
+        url = meta.get("url", "")
+        title = meta.get("title", "")
+        if url in seen_urls:
+            continue
+        # Replace URL hyphens with spaces so "devops" matches "devops-consulting"
+        url_readable = url.replace("-", " ").replace("/", " ")
+        topics = meta.get("topics", "")
+        if pattern.search(title) or pattern.search(url_readable) or (topics and pattern.search(topics)):
+            seen_urls.add(url)
+            matches.append({
+                "title": title,
+                "url": url,
+                "published_date": meta.get("published_date", ""),
+            })
+
+    # Sort by date descending, unparseable dates go to the bottom
+    matches.sort(key=lambda a: _parse_date(a["published_date"]), reverse=True)
+    return matches
+
+
+def _is_recency_query(question: str) -> bool:
+    """Return True if the question contains any recency-related keywords."""
+    lowered = question.lower()
+    return any(keyword in lowered for keyword in RECENCY_KEYWORDS)
+
+
+def _parse_date(date_str: str):
+    """Parse a date string like 'May 28, 2026' into a comparable datetime object."""
+    from datetime import datetime
+    try:
+        return datetime.strptime(date_str.strip(), "%B %d, %Y")
+    except ValueError:
+        return datetime.min
+
+
+def _get_most_recent_chunks() -> list:
+    """Fetch the chunks belonging to the most recently published article."""
+    all_metadata = vectorstore._collection.get(include=["metadatas", "documents"])
+
+    # Pair each chunk's text with its metadata, filter out empty dates
+    chunks_with_dates = [
+        (doc, meta)
+        for doc, meta in zip(all_metadata["documents"], all_metadata["metadatas"])
+        if meta.get("published_date")
+    ]
+
+    if not chunks_with_dates:
+        return []
+
+    most_recent_date = max(
+        (meta["published_date"] for _, meta in chunks_with_dates),
+        key=_parse_date,
+    )
+
+    # Return all chunks from that article as LangChain-style objects
+    from langchain_core.documents import Document
+    return [
+        Document(page_content=doc, metadata=meta)
+        for doc, meta in chunks_with_dates
+        if meta["published_date"] == most_recent_date
+    ]
+
+
+_BLOG_BASE = "https://www.bitovi.com/blog/"
+
+
+def _make_slug(url: str) -> str:
+    return url.replace(_BLOG_BASE, "").rstrip("/") if url.startswith(_BLOG_BASE) else url
+
+
+def _make_excerpt(text: str, title: str, max_chars: int = 150) -> str:
+    # Strip the injected title prefix so the excerpt starts with article prose
+    if title and text.startswith(title):
+        text = text[len(title):].lstrip("\n").lstrip()
+    text = text.strip()
+    if len(text) <= max_chars:
+        return text
+    trimmed = text[:max_chars]
+    last_space = trimmed.rfind(" ")
+    if last_space > 0:
+        trimmed = trimmed[:last_space]
+    return trimmed + "…"
+
+
+def _build_numbered_context(docs: list) -> tuple[str, list[dict]]:
+    """Build numbered context for the LLM and a parallel unique-source list.
+
+    Each unique URL gets a source number. Chunks from the same article share
+    the same number. The returned source list is indexed so that source N
+    corresponds to sources[N-1].
+    """
+    url_to_num: dict[str, int] = {}
+    sources: list[dict] = []
+    parts: list[str] = []
+
+    for doc in docs:
+        url = doc.metadata.get("url", "")
+        if not url:
+            continue
+        title = doc.metadata.get("title", "")
+        if url not in url_to_num:
+            url_to_num[url] = len(sources) + 1
+            sources.append({
+                "title": title,
+                "url": url,
+                "published_date": doc.metadata.get("published_date", ""),
+                "excerpt": _make_excerpt(doc.page_content, title),
+            })
+        num = url_to_num[url]
+        date = doc.metadata.get("published_date", "")
+        header = f"[Source {num}: {title}"
+        if date:
+            header += f" — Published: {date}"
+        header += "]"
+        parts.append(f"{header}\n{doc.page_content}")
+
+    return "\n\n".join(parts), sources
+
+
+def _filter_cited_sources(answer: str, sources: list[dict]) -> list[dict]:
+    """Return only sources whose number was cited in the answer text via [N] markers.
+
+    If the LLM did not cite anything, returns an empty list — the LLM either
+    couldn't answer or chose not to use the context, so showing sources would
+    be misleading.
+    """
+    import re
+    # Match both [1] and [Source 1] / [source 1] formats
+    cited = {int(m) for m in re.findall(r"\[(?:source\s+)?(\d+)\]", answer, re.IGNORECASE)}
+    return [s for i, s in enumerate(sources, 1) if i in cited]
+
 
 
 def build_rag_chain():
@@ -60,12 +268,12 @@ def build_rag_chain():
     )
 
     def _generate(inputs: dict) -> dict:
-        context = _format_docs(inputs["source_documents"])
+        context, numbered_sources = _build_numbered_context(inputs["source_documents"])
         formatted = prompt.invoke({"context": context, "question": inputs["question"]})
         answer = llm.invoke(formatted)
         return {
             "result": answer.content,
-            "source_documents": inputs["source_documents"],
+            "numbered_sources": numbered_sources,
         }
 
     return retrieve_step | RunnableLambda(_generate)
@@ -74,26 +282,43 @@ def build_rag_chain():
 def query_rag(question: str) -> dict:
     """Run the RAG chain for the given question and return the answer with sources.
 
+    For recency queries, bypasses semantic search and retrieves chunks from
+    the most recently published article by metadata date.
+
     Returns a dict with keys:
       - answer (str): the LLM's response
       - sources (list[dict]): deduplicated list of {title, url} from retrieved docs
     """
-    result = rag_chain.invoke(question)
+    if _is_listing_query(question):
+        topic = _extract_topic(question)
+        if topic:
+            matches = _search_articles_by_topic(topic)
+            if matches:
+                answer = f"Found {len(matches)} article(s) about '{topic}'."
+            else:
+                answer = f"No articles found about '{topic}'."
+            return {"answer": answer, "sources": matches}
+        # If no topic could be extracted fall through to normal RAG
 
-    answer: str = result["result"]
-
-    seen_urls: set[str] = set()
-    sources: list[dict] = []
-    for doc in result.get("source_documents", []):
-        url = doc.metadata.get("url", "")
-        if url and url not in seen_urls:
-            seen_urls.add(url)
-            sources.append(
-                {
-                    "title": doc.metadata.get("title", ""),
-                    "url": url,
-                }
+    if _is_recency_query(question):
+        source_documents = _get_most_recent_chunks()
+        if source_documents:
+            prompt = PromptTemplate(
+                input_variables=["context", "question"],
+                template=_SYSTEM_PROMPT,
             )
+            context, numbered_sources = _build_numbered_context(source_documents)
+            formatted = prompt.invoke({"context": context, "question": question})
+            answer = llm.invoke(formatted).content
+        else:
+            return {"answer": "I could not find any articles with a publication date.", "sources": []}
+        sources = _filter_cited_sources(answer, numbered_sources)
+        return {"answer": answer, "sources": sources}
+
+    result = rag_chain.invoke(question)
+    answer = result["result"]
+    numbered_sources = result.get("numbered_sources", [])
+    sources = _filter_cited_sources(answer, numbered_sources)
 
     return {"answer": answer, "sources": sources}
 
