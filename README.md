@@ -6,7 +6,9 @@ A Retrieval-Augmented Generation (RAG) application that answers natural-language
 
 ## Live Demo
 
-> _Deployed URL: **TODO**_
+**Frontend:** https://bitovi.artfricastudio.com/
+
+**Backend API:** https://api-bitovi.artfricastudio.com/
 
 ## Demo Video
 
@@ -259,6 +261,53 @@ npm run dev               # serves on http://localhost:5173
 ```
 
 Open the dev URL, confirm the backend health indicator is green, and ask a question.
+
+---
+
+## Deployment
+
+The application runs on an **Ubuntu Linux droplet on DigitalOcean**, with the backend and frontend served as distinct concerns behind Apache.
+
+**Backend (FastAPI).** Run as a long-lived **systemd** service rather than a foreground process, so it restarts on crash or reboot and logs through `journalctl`. A typical unit runs Uvicorn against the app inside the project's virtualenv:
+
+```ini
+# /etc/systemd/system/bitovi-backend.service
+[Unit]
+Description=Bitovi Blog AI Agent — FastAPI backend
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/var/www/production/bitovi/backend
+EnvironmentFile=/var/www/production/bitovi/backend/.env
+ExecStart=/var/www/production/bitovi/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now bitovi-backend
+sudo systemctl status bitovi-backend
+```
+
+**Reverse proxy (Apache2).** The frontend and backend are served from two separate Apache vhosts, each with its own TLS certificate:
+
+- `bitovi.artfricastudio.com` serves the frontend's static Vite build (`npm run build`).
+- `api-bitovi.artfricastudio.com` reverse-proxies to the Uvicorn process bound on `127.0.0.1:8001`, so the backend is never exposed directly.
+
+The frontend's `VITE_API_URL` points at the API subdomain. CORS on the backend already allows cross-origin requests (`allow_origins=["*"]` in `main.py`), so the split-origin setup works without extra configuration.
+
+```apache
+# api-bitovi.artfricastudio.com vhost (TLS terminated by Apache)
+ProxyPreserveHost On
+ProxyPass        /  http://127.0.0.1:8001/
+ProxyPassReverse /  http://127.0.0.1:8001/
+```
+
+**Deploy summary:** Ubuntu (DigitalOcean) · systemd-managed Uvicorn · Apache2 reverse proxy + TLS · separate frontend / API subdomains · Vite static build for the frontend.
 
 ---
 
