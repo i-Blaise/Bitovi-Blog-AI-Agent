@@ -214,7 +214,7 @@ export function IngestionPanel({ onComplete }: Props) {
               Crawl, chunk &amp; embed every post into the vector index.
             </p>
             <p className="mt-1 text-[10.5px] leading-snug text-bone-dim/60">
-              Already ingested? Re-ingestion is skipped automatically — delete <code className="text-[10px]">./chroma_db</code> and <code className="text-[10px]">./docstore</code> to force a fresh run.
+              Already ingested? Re-ingestion is skipped automatically. Delete <code className="text-[10px]">./chroma_db</code> + <code className="text-[10px]">./docstore</code> to re-embed, or also delete <code className="text-[10px]">./articles.json</code> for a full re-scrape + rebuild.
             </p>
           </div>
         </div>

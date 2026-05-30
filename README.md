@@ -25,11 +25,11 @@ Its defining decision: **knowledge** questions ("what does Bitovi recommend for 
 
 ## Architecture Overview
 
-Three stages: an **offline ingestion pipeline** that builds the index, an **online query path** that routes each question to one of three strategies, and a **React UI** driving both.
+Three stages: a **build-time ingestion pipeline** that constructs the index (triggerable at runtime via `POST /ingest`), a **query-time path** that routes each question to one of three strategies, and a **React UI** driving both.
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion["Ingestion Pipeline (offline, idempotent)"]
+    subgraph Ingestion["Ingestion Pipeline (build-time, idempotent)"]
         SM[bitovi.com/sitemap.xml] --> SC[Scraper<br/>BeautifulSoup + lxml]
         SC -->|title, body, date, topics| AJ[(articles.json cache)]
         AJ --> CH[ParentDocumentRetriever<br/>child 600 / parent 2000]
@@ -38,7 +38,7 @@ flowchart TD
         CH -->|parent docs| DS[(LocalFileStore)]
     end
 
-    subgraph Query["Query Path (online)"]
+    subgraph Query["Query Path (query-time)"]
         Q[User question] --> R{Router<br/>keyword heuristics}
         R -->|"show me all / how many"| MD[Metadata scan<br/>title · URL · topic tags]
         R -->|"latest / most recent"| RC[Most-recent-by-date]
