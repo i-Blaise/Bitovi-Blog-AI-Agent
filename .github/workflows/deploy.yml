@@ -1,4 +1,4 @@
-name: Deploy Bitovi Project
+name: Deploy Bitovi
 
 on:
   push:
