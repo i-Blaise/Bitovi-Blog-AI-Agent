@@ -19,7 +19,21 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script_stop: true
           script: |
+            set -e
+
             echo "Starting deployment..."
+
+            export NVM_DIR="/root/.nvm"
+
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            fi
+
+            echo "Node Version:"
+            node -v
+
+            echo "NPM Version:"
+            npm -v
 
             cd /var/www/production/bitovi
 
@@ -27,6 +41,7 @@ jobs:
 
             echo "Installing frontend dependencies..."
             cd frontend
+
             npm ci
             npm run build
 
@@ -34,6 +49,7 @@ jobs:
             cd ../backend
 
             source venv/bin/activate
+
             pip install -r requirements.txt
 
             sudo systemctl restart bitovi-api
