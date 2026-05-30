@@ -41,7 +41,7 @@ export function IngestionPanel({ onComplete }: Props) {
   const prevStatusRef = useRef<IngestStatus["status"] | null>(null);
   const lastLoggedScrapeRef = useRef(0);
   const lastLoggedIngestRef = useRef(0);
-  const pollIntervalRef = useRef<number | undefined>();
+  const pollIntervalRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const el = logScrollRef.current;
