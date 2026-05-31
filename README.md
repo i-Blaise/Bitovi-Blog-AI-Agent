@@ -63,24 +63,24 @@ flowchart TD
 
 ## Design Decisions
 
-**Why RAG.** The corpus changes and answers must be *attributable*. Fine-tuning gives no provenance and a stale snapshot; a long-context dump is costly per query and dilutes relevance. RAG keeps knowledge external, swappable on re-ingest, and points every answer back to its source.
+**Why RAG.** The corpus changes regularly and answers must cite their source. RAG keeps knowledge external and swappable on re-ingest, and grounds every answer in a specific article — which fine-tuning and long-context prompting don't give cleanly.
 
-**Dual-path routing — the core idea.** A blog Q&A system serves two different question shapes, and one pipeline can't do both well:
+**Dual-path routing — the core decision.** A blog Q&A system serves two question shapes that need different machinery:
 
-- *Knowledge queries* ("what testing tools does Bitovi recommend?") need **semantic retrieval**. The relevant passage rarely shares vocabulary with the question — an article recommends Cypress without saying "recommend" — so embedding similarity beats keyword matching. These run the full retrieve → ground → generate pipeline.
-- *Discovery queries* ("how many DevOps articles?") need **exact metadata filtering**. Vector search returns the `k` *most similar* chunks — it has no notion of "all" or "how many," so asking it to count is a category error. Instead, a deterministic regex scan runs over **every** article's title, URL slug, and Bitovi `/blog/topic/` tags. Reusing Bitovi's own taxonomy catches articles *tagged* DevOps even when the word isn't in the title; word-boundary matching (`\bAI\b`) avoids false hits like `available`. No LLM, no embeddings, exact results.
+- *Knowledge queries* ("what testing tools does Bitovi recommend?") need **semantic retrieval** — the answer rarely shares vocabulary with the question, so embedding similarity wins. Full retrieve → ground → generate pipeline.
+- *Discovery queries* ("how many DevOps articles?") need **exact metadata filtering**. Vector search returns the top-`k` *similar* chunks — it has no notion of "all" or "how many," so counting with it is a category error. Instead a deterministic scan runs over every article's title, URL, and Bitovi `/blog/topic/` tags, which also catches articles *tagged* DevOps without the word in the title. No LLM, exact results.
 
-Two **date-based paths** handle *recency* ("latest post") and *oldest* ("first/earliest post") by sorting on parsed `published_date` — the right signal for newest/oldest, which similarity is not. These select a single article by date, then summarize it through the same generate → cite pipeline as knowledge queries.
+Two **date-based paths** (recency / oldest) select a single article by `published_date`, then summarize it through the knowledge pipeline — the right signal for "newest/oldest," which similarity isn't.
 
-*Tradeoff:* routing is keyword-heuristic, not an LLM classifier — fast, free, deterministic, but brittle on phrasings without a trigger word ("which posts cover X?"). An LLM router is the planned upgrade.
+*Tradeoff:* routing is keyword-heuristic, not an LLM classifier — fast and deterministic, but brittle on phrasings without a trigger word. An LLM router is the planned upgrade.
 
-**Parent/child chunking.** Small chunks embed precisely but lack context; large chunks carry context but embed fuzzily. `ParentDocumentRetriever` decouples the two — search over 600-char children (sharp similarity), generate over their 2000-char parents (full argument). The article title is prepended to its content before chunking so proper-name queries ("what is BitOps?") stay retrievable.
+**Parent/child chunking.** `ParentDocumentRetriever` searches over 600-char children for sharp similarity but returns their 2000-char parents for generation — precise retrieval, rich context. Titles are prepended before chunking to keep proper-name queries retrievable.
 
-**Source attribution.** The prompt makes citation a hard contract. Context is numbered `[Source N]` blocks (chunks from one article share a number). After generation, `_filter_cited_sources` drops every source the model didn't cite and renumbers the rest — so if the model cites sources 6 and 7 of 8, those become `[1]` and `[2]` in both text and cards, never drifting out of sync.
+**Source attribution.** Context is numbered `[Source N]` blocks; the prompt requires a citation per claim. After generation, uncited sources are dropped and the rest renumbered, so inline markers and the displayed source cards always match.
 
-**Hallucination prevention (defense in depth).** Temperature 0; a strict "cite or don't say it" prompt with a partial-answer escape hatch ("note what's missing"); citation filtering so visible sources are the ones actually used; and routing factual counts out of the LLM entirely so they're computed, never generated.
+**Hallucination mitigation.** Defense in depth: temperature 0; a "cite it or don't say it" prompt; dropping uncited sources so shown evidence is always the evidence used; and computing discovery counts in code so the model can't fabricate a number.
 
-**Retrieval confidence (honest limitation).** Retrieval is a fixed top-`k` of 15 with no similarity threshold or reranker. Confidence today is behavioral — the prompt answers only from context and flags gaps; empty citations are treated as "no usable answer." A score-based gate is a deliberate next step, not an overclaim.
+**Retrieval confidence (known limitation).** Retrieval is a fixed top-`k` of 15 with no similarity threshold or reranker — confidence today is behavioral (answer only from context, flag gaps, treat empty citations as "no answer"). A score-based gate is the planned next step.
 
 ---
 
