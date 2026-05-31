@@ -50,6 +50,16 @@ RECENCY_KEYWORDS = [
     "today",
 ]
 
+OLDEST_KEYWORDS = [
+    "oldest",
+    "earliest",
+    "very first",
+    "first blog",
+    "first article",
+    "first post",
+    "first ever",
+]
+
 _SYSTEM_PROMPT = (
     "You are an AI assistant that answers questions based on Bitovi's blog articles.\n\n"
     "Use the numbered context below to answer the question. Each source is labeled [Source N].\n"
@@ -143,6 +153,12 @@ def _is_recency_query(question: str) -> bool:
     return any(keyword in lowered for keyword in RECENCY_KEYWORDS)
 
 
+def _is_oldest_query(question: str) -> bool:
+    """Return True if the question asks for the oldest/first article."""
+    lowered = question.lower()
+    return any(keyword in lowered for keyword in OLDEST_KEYWORDS)
+
+
 def _parse_date(date_str: str):
     """Parse a date string like 'May 28, 2026' into a comparable datetime object."""
     from datetime import datetime
@@ -152,21 +168,28 @@ def _parse_date(date_str: str):
         return datetime.min
 
 
-def _get_most_recent_chunks() -> list:
-    """Fetch the chunks belonging to the most recently published article."""
+def _get_chunks_by_date_extreme(oldest: bool = False) -> list:
+    """Fetch all chunks belonging to the oldest or most recently published article.
+
+    `oldest=False` returns the newest article (recency path); `oldest=True`
+    returns the earliest. Chunks whose date can't be parsed are excluded so an
+    unparseable date can't masquerade as the "oldest" entry.
+    """
+    from datetime import datetime
     all_metadata = vectorstore._collection.get(include=["metadatas", "documents"])
 
-    # Pair each chunk's text with its metadata, filter out empty dates
+    # Keep only chunks with a parseable publication date
     chunks_with_dates = [
         (doc, meta)
         for doc, meta in zip(all_metadata["documents"], all_metadata["metadatas"])
-        if meta.get("published_date")
+        if meta.get("published_date") and _parse_date(meta["published_date"]) != datetime.min
     ]
 
     if not chunks_with_dates:
         return []
 
-    most_recent_date = max(
+    pick = min if oldest else max
+    target_date = pick(
         (meta["published_date"] for _, meta in chunks_with_dates),
         key=_parse_date,
     )
@@ -176,7 +199,7 @@ def _get_most_recent_chunks() -> list:
     return [
         Document(page_content=doc, metadata=meta)
         for doc, meta in chunks_with_dates
-        if meta["published_date"] == most_recent_date
+        if meta["published_date"] == target_date
     ]
 
 
@@ -296,11 +319,32 @@ def build_rag_chain():
     return retrieve_step | RunnableLambda(_generate)
 
 
+def _summarize_documents(question: str, source_documents: list) -> dict:
+    """Generate a cited answer from a fixed set of source documents.
+
+    Shared by the recency and oldest paths: both select a single article by
+    date, then run it through the same numbered-context → generate → cite
+    pipeline used for knowledge queries.
+    """
+    if not source_documents:
+        return {"answer": "I could not find any articles with a publication date.", "sources": []}
+
+    prompt = PromptTemplate(
+        input_variables=["context", "question"],
+        template=_SYSTEM_PROMPT,
+    )
+    context, numbered_sources = _build_numbered_context(source_documents)
+    formatted = prompt.invoke({"context": context, "question": question})
+    answer = llm.invoke(formatted).content
+    answer, sources = _filter_cited_sources(answer, numbered_sources)
+    return {"answer": answer, "sources": sources}
+
+
 def query_rag(question: str) -> dict:
     """Run the RAG chain for the given question and return the answer with sources.
 
-    For recency queries, bypasses semantic search and retrieves chunks from
-    the most recently published article by metadata date.
+    Routes to one of four paths: listing (exact metadata match), recency and
+    oldest (single article selected by date), or semantic RAG (default).
 
     Returns a dict with keys:
       - answer (str): the LLM's response
@@ -318,19 +362,10 @@ def query_rag(question: str) -> dict:
         # If no topic could be extracted fall through to normal RAG
 
     if _is_recency_query(question):
-        source_documents = _get_most_recent_chunks()
-        if source_documents:
-            prompt = PromptTemplate(
-                input_variables=["context", "question"],
-                template=_SYSTEM_PROMPT,
-            )
-            context, numbered_sources = _build_numbered_context(source_documents)
-            formatted = prompt.invoke({"context": context, "question": question})
-            answer = llm.invoke(formatted).content
-        else:
-            return {"answer": "I could not find any articles with a publication date.", "sources": []}
-        answer, sources = _filter_cited_sources(answer, numbered_sources)
-        return {"answer": answer, "sources": sources}
+        return _summarize_documents(question, _get_chunks_by_date_extreme(oldest=False))
+
+    if _is_oldest_query(question):
+        return _summarize_documents(question, _get_chunks_by_date_extreme(oldest=True))
 
     result = rag_chain.invoke(question)
     answer = result["result"]

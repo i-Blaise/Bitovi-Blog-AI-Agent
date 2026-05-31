@@ -18,14 +18,14 @@ Its defining decision: **knowledge** questions ("what does Bitovi recommend for 
 - **Content extraction** — Title (`og:title`), body (`<article>` only, to drop nav/footer noise), published date (`<time>`), and **topic tags** (`/blog/topic/...` links). Empty pages are skipped.
 - **Parent/child chunking** — 600-char child chunks embedded for precise search; 2000-char parents returned to the LLM for context.
 - **Citations** — The LLM must cite every claim as `[N]`; the backend drops uncited sources, renumbers the rest, and the UI renders each `[N]` as a link to the source article.
-- **Discovery & recency paths** — Listing/count questions and "latest" questions bypass the LLM for exact, deterministic answers.
+- **Discovery & date paths** — Listing/count questions bypass the LLM for exact answers; "latest"/"oldest" questions select a single article by date, then summarize it.
 - **UI** — Split-pane chat + ingestion panel with source cards and an observability strip (indexed count, last-indexed time, models in use).
 
 ---
 
 ## Architecture Overview
 
-Three stages: a **build-time ingestion pipeline** that constructs the index (triggerable at runtime via `POST /ingest`), a **query-time path** that routes each question to one of three strategies, and a **React UI** driving both.
+Three stages: a **build-time ingestion pipeline** that constructs the index (triggerable at runtime via `POST /ingest`), a **query-time path** that routes each question to one of four strategies, and a **React UI** driving both.
 
 ```mermaid
 flowchart TD
@@ -41,7 +41,7 @@ flowchart TD
     subgraph Query["Query Path (query-time)"]
         Q[User question] --> R{Router<br/>keyword heuristics}
         R -->|"show me all / how many"| MD[Metadata scan<br/>title · URL · topic tags]
-        R -->|"latest / most recent"| RC[Most-recent-by-date]
+        R -->|"latest / oldest"| RC[Single article<br/>newest or oldest by date]
         R -->|everything else| SEM[Semantic retrieval<br/>top-k = 15]
         SEM --> VS
         RC --> VS
@@ -70,7 +70,7 @@ flowchart TD
 - *Knowledge queries* ("what testing tools does Bitovi recommend?") need **semantic retrieval**. The relevant passage rarely shares vocabulary with the question — an article recommends Cypress without saying "recommend" — so embedding similarity beats keyword matching. These run the full retrieve → ground → generate pipeline.
 - *Discovery queries* ("how many DevOps articles?") need **exact metadata filtering**. Vector search returns the `k` *most similar* chunks — it has no notion of "all" or "how many," so asking it to count is a category error. Instead, a deterministic regex scan runs over **every** article's title, URL slug, and Bitovi `/blog/topic/` tags. Reusing Bitovi's own taxonomy catches articles *tagged* DevOps even when the word isn't in the title; word-boundary matching (`\bAI\b`) avoids false hits like `available`. No LLM, no embeddings, exact results.
 
-A third path handles *recency* ("latest post") by sorting on parsed `published_date` — the right signal for "newest," which similarity is not.
+Two **date-based paths** handle *recency* ("latest post") and *oldest* ("first/earliest post") by sorting on parsed `published_date` — the right signal for newest/oldest, which similarity is not. These select a single article by date, then summarize it through the same generate → cite pipeline as knowledge queries.
 
 *Tradeoff:* routing is keyword-heuristic, not an LLM classifier — fast, free, deterministic, but brittle on phrasings without a trigger word ("which posts cover X?"). An LLM router is the planned upgrade.
 
@@ -182,6 +182,7 @@ A formal automated eval harness is intentional future work.
 | Question | Path | Result |
 |---|---|---|
 | `What is Bitovi's latest blog post about?` | Recency | Summary of the newest article. |
+| `What was Bitovi's first blog post about?` | Oldest | Summary of the earliest article. |
 | `Show me all Bitovi articles about DevOps.` | Discovery | Exact, exhaustive tagged list, newest first. |
 | `How many articles does Bitovi have about AI?` | Discovery | Exact count, including topic-tag-only matches. |
 | `What testing tools does Bitovi recommend?` | Knowledge | Grounded, citation-backed answer. |
