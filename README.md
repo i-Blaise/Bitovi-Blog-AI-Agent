@@ -72,8 +72,7 @@ flowchart TD
 
 Two **date-based paths** (recency / oldest) select a single article by `published_date`, then summarize it through the knowledge pipeline — the right signal for "newest/oldest," which similarity isn't.
 
-*Tradeoff:* routing is keyword-heuristic, not an LLM classifier — fast and deterministic, but brittle on phrasings without a trigger word. An LLM router is the planned upgrade.
-
+*Tradeoff:* routing is keyword-heuristic, not an LLM classifier — fast and deterministic, but brittle on phrasings without a trigger word.
 **Parent/child chunking.** `ParentDocumentRetriever` searches over 600-char children for sharp similarity but returns their 2000-char parents for generation — precise retrieval, rich context. Titles are prepended before chunking to keep proper-name queries retrievable.
 
 **Source attribution.** Context is numbered `[Source N]` blocks; the prompt requires a citation per claim. After generation, uncited sources are dropped and the rest renumbered, so inline markers and the displayed source cards always match.
@@ -117,7 +116,7 @@ cp backend/.env.example backend/.env  # set OPENAI_API_KEY=sk-...
 # Frontend
 cd frontend
 npm install
-cp .env.example .env                  # VITE_API_URL defaults to http://localhost:8000
+cp .env.example .env                  # optional — frontend falls back to http://localhost:8000 without it
 cd ..
 ```
 
@@ -126,7 +125,9 @@ cd ..
 | Variable | Location | Required | Description |
 |---|---|---|---|
 | `OPENAI_API_KEY` | `backend/.env` | **Yes** | Used for embeddings and generation. |
-| `VITE_API_URL` | `frontend/.env` | No | Backend base URL (default `http://localhost:8000`). |
+| `VITE_API_URL` | `frontend/.env` | No | Backend base URL. Defaults to `http://localhost:8000` if unset. |
+
+For production builds, `frontend/.env.production` sets `VITE_API_URL` to the deployed API; Vite loads it automatically during `npm run build` (and ignores it in `npm run dev`).
 
 Tunables (chunk sizes, `k`, model names) are constants at the top of `backend/ingest.py` and `backend/rag_chain.py`.
 
