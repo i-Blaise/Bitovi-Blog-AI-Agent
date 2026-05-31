@@ -193,7 +193,7 @@ A formal automated eval harness is intentional future work.
 
 - **LLM-based routing** — replace keyword heuristics so phrasing variants route correctly.
 - **Reranking** — a cross-encoder over the top-`k` to improve which passages reach the LLM.
-- **Hybrid search** — dense + sparse (BM25) to catch exact terms, acronyms, and product names.
+- **Hybrid search** — combining BM25 and dense embeddings would improve entity-based questions where relevant facts appear as incidental mentions within semantically unrelated content. During testing, queries such as *"Who is the CEO of Bitovi?"* exposed limitations of pure dense retrieval despite the answer existing in indexed documents.
 - **Confidence thresholds** — drop low-similarity chunks and abstain when nothing clears the bar.
 - **Evaluation framework** — labeled Q/A/source set with recall@k, citation accuracy, faithfulness metrics.
 - **Incremental ingestion** — diff the sitemap and ingest only new/changed articles for cheap scheduled refreshes.

@@ -4,6 +4,7 @@
 # Generated at ingest time, not committed
 chroma_db/
 docstore/
+articles.json
 
 # Python
 __pycache__/
