@@ -168,11 +168,11 @@ For a knowledge query: **route** (no listing/recency keyword → semantic) → *
 
 ## Testing
 
-Validated manually but systematically across all three routing paths.
+Validated manually but systematically across all four routing paths.
 
 - **Assignment queries** verified end-to-end (latest / discovery / count / knowledge). Discovery counts cross-checked by independently scanning `articles.json` with the same matching logic.
 - **Hallucination:** confirmed the model abstains when context lacks the answer, and counts are computed in code so they can't drift.
-- **Edge cases fixed:** trailing-punctuation topics (`DevOps.` matched nothing); citation/source number mismatch (`[6][7]` vs cards `[1][2]`); word-boundary matching; empty-body pages skipped at scrape time.
+- **Edge cases fixed:** topic discovery initially matched only title/URL text, undercounting articles Bitovi *tags* under a topic (e.g. DevOps returned far fewer than the site) — fixed by scraping `/blog/topic/` tags into metadata and matching those; trailing-punctuation topics (`DevOps.` matched nothing); citation/source number mismatch (`[6][7]` vs cards `[1][2]`); word-boundary matching.
 
 A formal automated eval harness is intentional future work.
 
