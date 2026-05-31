@@ -8,7 +8,7 @@ Its defining decision: **knowledge** questions ("what does Bitovi recommend for 
 
 - **Frontend:** https://bitovi.artfricastudio.com/
 - **Backend API (interactive docs):** https://api-bitovi.artfricastudio.com/docs
-- **Demo video:** _TODO_
+- **Demo video:** https://www.youtube.com/watch?v=EvEApIcFJnM
 
 ---
 
@@ -63,7 +63,7 @@ flowchart TD
 
 ## Design Decisions
 
-**Why RAG.** The corpus changes regularly and answers must cite their source. RAG keeps knowledge external and swappable on re-ingest, and grounds every answer in a specific article — which fine-tuning and long-context prompting don't give cleanly.
+**Why RAG.** The Bitovi blog changes regularly and answers must cite their source. RAG keeps knowledge external and swappable on re-ingest, and grounds every answer in a specific article — which fine-tuning and long-context prompting don't give cleanly.
 
 **Dual-path routing — the core decision.** A blog Q&A system serves two question shapes that need different machinery:
 
@@ -195,7 +195,7 @@ A formal automated eval harness is intentional future work.
 
 - **LLM-based routing** — replace keyword heuristics so phrasing variants route correctly.
 - **Reranking** — a cross-encoder over the top-`k` to improve which passages reach the LLM.
-- **Hybrid search** — combining BM25 and dense embeddings would improve entity-based questions where relevant facts appear as incidental mentions within semantically unrelated content. During testing, queries such as *"Who is the CEO of Bitovi?"* exposed limitations of pure dense retrieval despite the answer existing in indexed documents.
+- **Hybrid search** — adding BM25 alongside dense embeddings to fix entity questions where the answer is an incidental mention in unrelated content. Testing *"Who is the CEO of Bitovi?"* exposed this limit of pure dense retrieval — the answer was indexed but didn't rank.
 - **Confidence thresholds** — drop low-similarity chunks and abstain when nothing clears the bar.
 - **Evaluation framework** — labeled Q/A/source set with recall@k, citation accuracy, faithfulness metrics.
 - **Incremental ingestion** — diff the sitemap and ingest only new/changed articles for cheap scheduled refreshes.
