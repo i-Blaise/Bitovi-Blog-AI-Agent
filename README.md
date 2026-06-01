@@ -108,10 +108,30 @@ git clone <repository-url>
 cd "Bitovi Blog AI Agent"
 
 # Backend
+cd backend
 python3 -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r backend/requirements.txt
-cp backend/.env.example backend/.env  # set OPENAI_API_KEY=sk-...
+```
+
+Activate the virtual environment:
+
+**Linux/macOS**
+
+```bash
+source .venv/bin/activate
+```
+
+**Windows PowerShell**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Then install dependencies and configure:
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env                  # set OPENAI_API_KEY=sk-...
+cd ..
 
 # Frontend
 cd frontend
@@ -137,14 +157,16 @@ Tunables (chunk sizes, `k`, model names) are constants at the top of `backend/in
 
 ```bash
 # 1. Backend  (http://localhost:8000)
-source .venv/bin/activate && cd backend && python main.py
+cd backend
+source .venv/bin/activate            # Windows PowerShell: .\.venv\Scripts\Activate.ps1
+python main.py
 
 # 2. Ingest (first run only) — from the UI button, or:
 curl -X POST http://localhost:8000/ingest
 curl http://localhost:8000/ingest/status   # poll progress
-# or standalone: python ingest.py
+# or standalone (from backend/, venv active): python ingest.py
 
-# 3. Frontend  (http://localhost:5173)
+# 3. Frontend  (http://localhost:5173) — in a separate terminal
 cd frontend && npm run dev
 ```
 
