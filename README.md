@@ -172,6 +172,7 @@ Validated manually but systematically across all four routing paths.
 
 - **Assignment queries** verified end-to-end (latest / discovery / count / knowledge). Discovery counts cross-checked by independently scanning `articles.json` with the same matching logic.
 - **Hallucination:** confirmed the model abstains when context lacks the answer, and counts are computed in code so they can't drift.
+- **Adversarial queries:** verified the prompt's grounding rules hold against prompt injection ("ignore your instructions…"), impersonation/roleplay requests ("pretend you are the CEO…"), and out-of-context questions ("capital of France") — all correctly refused or answered "unavailable" rather than complying or speculating.
 - **Edge cases fixed:** topic discovery initially matched only title/URL text, undercounting articles Bitovi *tags* under a topic (e.g. DevOps returned far fewer than the site) — fixed by scraping `/blog/topic/` tags into metadata and matching those; trailing-punctuation topics (`DevOps.` matched nothing); citation/source number mismatch (`[6][7]` vs cards `[1][2]`); word-boundary matching.
 
 A formal automated eval harness is intentional future work.
