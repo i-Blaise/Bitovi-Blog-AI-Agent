@@ -222,9 +222,3 @@ A formal automated eval harness is intentional future work.
 - **Confidence thresholds** — drop low-similarity chunks and abstain when nothing clears the bar.
 - **Evaluation framework** — labeled Q/A/source set with recall@k, citation accuracy, faithfulness metrics.
 - **Incremental ingestion** — diff the sitemap and ingest only new/changed articles for cheap scheduled refreshes.
-
----
-
-## Submission Notes
-
-Implements the exercise end-to-end: automated sitemap ingestion (~460 articles with structured metadata), parent/child chunking into a persistent vector store, semantic RAG with fully cited answers, and **deterministic** metadata/tag filtering for discovery queries rather than approximate vector search. The central decision is the **dual-path design** — routing "answer this" and "enumerate matching articles" to the strategy correct for each — with tradeoffs (heuristic routing, no reranker, no score threshold) documented rather than hidden.
